@@ -14,6 +14,7 @@ defmodule Plausible.Application do
         Keyword.merge([scheme: :http, port: 8123, name: :clickhouse], clickhouse_config)
       ),
       Plausible.Session.Store,
+      Plausible.Session.Salts,
       {Oban, Application.get_env(:plausible, Oban)}
     ]
 
