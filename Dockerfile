@@ -14,9 +14,11 @@ ENV APP_VERSION=$APP_VER
 RUN mkdir /app
 WORKDIR /app
 
-# install repo for up-to-date npm
+# add repos for up-to-date versions of nodejs and yarn
 
-RUN curl -sL https://deb.nodesource.com/setup_12.x | bash -
+RUN curl -sL https://deb.nodesource.com/setup_12.x | bash - \
+    && curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add - \
+    && echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
 
 # install build dependencies
 RUN apt-get update  && \
