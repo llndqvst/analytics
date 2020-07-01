@@ -14,6 +14,10 @@ ENV APP_VERSION=$APP_VER
 RUN mkdir /app
 WORKDIR /app
 
+# install repo for up-to-date npm
+
+RUN curl -sL https://deb.nodesource.com/setup_12.x | bash -
+
 # install build dependencies
 RUN apt-get update  && \
     apt-get install -y git build-essential nodejs yarn python npm --no-install-recommends && \
