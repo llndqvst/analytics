@@ -18,9 +18,14 @@ db_pool_size = String.to_integer(System.get_env("DATABASE_POOLSIZE", "10"))
 
 db_url =
   System.get_env(
-    "DATABASE_URL",
-    "postgres://postgres:postgres@127.0.0.1:5432/plausible_test?currentSchema=default"
+    "DATABASE_URL"
   )
+
+db_name = System.get_env("DATABASE_NAME")
+db_user = System.get_env("DATABASE_USER")
+db_password = System.get_env("DATABASE_PASSWORD")
+db_host = System.get_env("DATABASE_HOST", "127.0.0.1")
+db_port = System.get_env("DATABASE_PORT", "5432")
 
 db_tls_enabled? = String.to_existing_atom(System.get_env("DATABASE_TLS_ENABLED", "false"))
 admin_user = System.get_env("ADMIN_USER_NAME")
@@ -81,12 +86,33 @@ config :plausible, PlausibleWeb.Endpoint,
   server: true,
   code_reloader: false
 
+case db_url do
+  nil ->
+    config :plausible,
+      Plausible.Repo,
+      pool_size: db_pool_size,
+      hostname: db_host,
+      database: db_name,
+      username: db_user,
+      password: db_password,
+      port: db_port,
+      adapter: Ecto.Adapters.Postgres,
+      ssl: db_tls_enabled?
+  x ->
+    config :plausible,
+      Plausible.Repo,
+      pool_size: db_pool_size,
+      url: x,
+      adapter: Ecto.Adapters.Postgres,
+      ssl: db_tls_enabled?
+end
+
 config :plausible,
-       Plausible.Repo,
-       pool_size: db_pool_size,
-       url: db_url,
-       adapter: Ecto.Adapters.Postgres,
-       ssl: db_tls_enabled?
+  Plausible.Repo,
+  pool_size: db_pool_size,
+  url: db_url,
+  adapter: Ecto.Adapters.Postgres,
+  ssl: db_tls_enabled?
 
 config :sentry,
   dsn: sentry_dsn,
