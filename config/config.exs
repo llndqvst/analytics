@@ -81,18 +81,32 @@ config :plausible, :paddle,
   vendor_id: "49430",
   vendor_auth_code: System.get_env("PADDLE_VENDOR_AUTH_CODE")
 
-config :plausible,
-       Plausible.Repo,
-       pool_size: String.to_integer(System.get_env("DATABASE_POOLSIZE", "10")),
-       timeout: 300_000,
-       connect_timeout: 300_000,
-       handshake_timeout: 300_000,
-       url:
-         System.get_env(
-           "DATABASE_URL",
-           "postgres://postgres:postgres@127.0.0.1:5432/plausible_dev?currentSchema=default"
-         ),
-       ssl: String.to_existing_atom(System.get_env("DATABASE_TLS_ENABLED", "false"))
+db_url = System.get_env("DATABASE_URL")
+
+case db_url do
+  nil ->
+    config :plausible,
+      Plausible.Repo,
+      pool_size: String.to_integer(System.get_env("DATABASE_POOLSIZE", "10")),
+      timeout: 300_000,
+      connect_timeout: 300_000,
+      handshake_timeout: 300_000,
+      hostname: System.get_env("DATABASE_HOST", "127.0.0.1"),
+      database: System.get_env("DATABASE_NAME"),
+      username: System.get_env("DATABASE_USER"),
+      password: System.get_env("DATABASE_PASSWORD"),
+      port: System.get_env("DATABASE_PORT", "5432"),
+      ssl: String.to_existing_atom(System.get_env("DATABASE_TLS_ENABLED", "false"))
+  x ->
+    config :plausible,
+      Plausible.Repo,
+      pool_size: String.to_integer(System.get_env("DATABASE_POOLSIZE", "10")),
+      timeout: 300_000,
+      connect_timeout: 300_000,
+      handshake_timeout: 300_000,
+      url: x,
+      ssl: String.to_existing_atom(System.get_env("DATABASE_TLS_ENABLED", "false"))
+end
 
 cron_enabled = String.to_existing_atom(System.get_env("CRON_ENABLED", "false"))
 
