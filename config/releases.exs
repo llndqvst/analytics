@@ -39,7 +39,7 @@ ck_host = System.get_env("CLICKHOUSE_DATABASE_HOST", "localhost")
 ck_db = System.get_env("CLICKHOUSE_DATABASE_NAME", "plausible_dev")
 ck_db_user = System.get_env("CLICKHOUSE_DATABASE_USER")
 ck_db_pwd = System.get_env("CLICKHOUSE_DATABASE_PASSWORD")
-ck_db_pool =  String.to_integer(System.get_env("CLICKHOUSE_DATABASE_POOLSIZE", "10"))
+ck_db_pool = String.to_integer(System.get_env("CLICKHOUSE_DATABASE_POOLSIZE", "10"))
 ### Mandatory params End
 
 sentry_dsn = System.get_env("SENTRY_DSN")
@@ -68,6 +68,7 @@ config :plausible,
 
 config :plausible, :selfhost,
   disable_authentication: disable_auth,
+  disable_subscription: String.to_existing_atom(System.get_env("DISABLE_SUBSCRIPTION", "false")),
   disable_registration:
     if(!disable_auth,
       do: String.to_existing_atom(System.get_env("DISABLE_REGISTRATION", "false")),
@@ -172,7 +173,12 @@ config :plausible, :custom_domain_server,
   password: custom_domain_server_password,
   ip: custom_domain_server_ip
 
-crontab = [
+base_cron = [
+  # Daily at midnight
+  {"0 0 * * *", Plausible.Workers.RotateSalts}
+]
+
+extra_cron = [
   # hourly
   {"0 * * * *", Plausible.Workers.SendSiteSetupEmails},
   #  hourly
@@ -187,7 +193,9 @@ crontab = [
   {"*/10 * * * *", Plausible.Workers.ProvisionSslCertificates}
 ]
 
-queues = [
+base_queues = [rotate_salts: 1]
+
+extra_queues = [
   provision_ssl_certificates: 1,
   fetch_tweets: 1,
   check_stats_emails: 1,
@@ -199,8 +207,8 @@ queues = [
 
 config :plausible, Oban,
   repo: Plausible.Repo,
-  queues: if(cron_enabled, do: queues, else: []),
-  crontab: if(cron_enabled, do: crontab, else: false)
+  queues: if(cron_enabled, do: base_queues ++ extra_queues, else: base_queues),
+  crontab: if(cron_enabled, do: base_cron ++ extra_cron, else: base_cron)
 
 config :ref_inspector,
   init: {Plausible.Release, :configure_ref_inspector}

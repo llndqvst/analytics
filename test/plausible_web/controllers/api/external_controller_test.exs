@@ -380,7 +380,6 @@ defmodule PlausibleWeb.Api.ExternalControllerTest do
     assert event["referrer"] == ""
   end
 
-
   # Fake data is set up in config/test.exs
   test "looks up the country from the ip address", %{conn: conn} do
     params = %{
@@ -409,5 +408,13 @@ defmodule PlausibleWeb.Api.ExternalControllerTest do
       |> post("/api/event", Jason.encode!(params))
 
     assert response(conn, 400) == ""
+  end
+
+  describe "GET /api/health" do
+    test "returns 200 OK", %{conn: conn} do
+      conn = get(conn, "/api/health")
+
+      assert conn.status == 200
+    end
   end
 end

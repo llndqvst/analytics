@@ -159,6 +159,15 @@ defmodule PlausibleWeb.SiteController do
     end
   end
 
+  def reset_stats(conn, %{"website" => website}) do
+    site = Sites.get_for_user!(conn.assigns[:current_user].id, website)
+    Plausible.Clickhouse.delete_stats!(site)
+
+    conn
+    |> put_flash(:success, "#{site.domain} stats will be reset in a few minutes")
+    |> redirect(to: "/#{URI.encode_www_form(site.domain)}/settings")
+  end
+
   def delete_site(conn, %{"website" => website}) do
     site =
       Sites.get_for_user!(conn.assigns[:current_user].id, website)
@@ -171,6 +180,7 @@ defmodule PlausibleWeb.SiteController do
     end
 
     Repo.delete!(site)
+    Plausible.Clickhouse.delete_stats!(site)
 
     conn
     |> put_flash(:success, "Site deleted succesfully along with all pageviews")
@@ -406,8 +416,9 @@ defmodule PlausibleWeb.SiteController do
   end
 
   def delete_custom_domain(conn, %{"website" => website}) do
-    site = Sites.get_for_user!(conn.assigns[:current_user].id, website)
-           |> Repo.preload(:custom_domain)
+    site =
+      Sites.get_for_user!(conn.assigns[:current_user].id, website)
+      |> Repo.preload(:custom_domain)
 
     Repo.delete!(site.custom_domain)
 

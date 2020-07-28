@@ -59,6 +59,7 @@ defmodule PlausibleWeb.Router do
 
     post "/event", Api.ExternalController, :event
     get "/error", Api.ExternalController, :error
+    get "/health", Api.ExternalController, :health
 
     post "/paddle/webhook", Api.PaddleController, :webhook
 
@@ -146,6 +147,7 @@ defmodule PlausibleWeb.Router do
     put "/:website/settings/google", SiteController, :update_google_auth
     delete "/:website/settings/google", SiteController, :delete_google_auth
     delete "/:website", SiteController, :delete_site
+    delete "/:website/stats", SiteController, :reset_stats
 
     get "/share/:slug", StatsController, :shared_link
     post "/share/:slug/authenticate", StatsController, :authenticate_shared_link

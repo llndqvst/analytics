@@ -16,12 +16,14 @@ defmodule Plausible.Workers.SendEmailReport do
 
       send_report(email, site, "Weekly", unsubscribe_link, query)
     end
+
     :ok
   end
 
   @impl Oban.Worker
   def perform(%{"interval" => "monthly", "site_id" => site_id}, _job) do
     site = Repo.get(Plausible.Site, site_id) |> Repo.preload(:monthly_report)
+
     last_month =
       Timex.now(site.timezone)
       |> Timex.shift(months: -1)
@@ -40,6 +42,7 @@ defmodule Plausible.Workers.SendEmailReport do
 
       send_report(email, site, Timex.format!(last_month, "{Mfull}"), unsubscribe_link, query)
     end
+
     :ok
   end
 
@@ -52,25 +55,26 @@ defmodule Plausible.Workers.SendEmailReport do
     bounce_rate = Stats.bounce_rate(site, query)
     prev_bounce_rate = Stats.bounce_rate(site, Query.shift_back(query))
     change_bounce_rate = if prev_bounce_rate > 0, do: bounce_rate - prev_bounce_rate
-    referrers = Stats.top_referrers(site, query)
-    pages = Stats.top_pages(site, query)
+    referrers = Stats.top_referrers(site, query, 5, [])
+    pages = Stats.top_pages(site, query, 5, [])
     user = Plausible.Auth.find_user_by(email: email)
     login_link = user && Plausible.Sites.is_owner?(user.id, site)
 
-    template = PlausibleWeb.Email.weekly_report(email, site,
-      unique_visitors: unique_visitors,
-      change_visitors: change_visitors,
-      pageviews: pageviews,
-      change_pageviews: change_pageviews,
-      bounce_rate: bounce_rate,
-      change_bounce_rate: change_bounce_rate,
-      referrers: referrers,
-      unsubscribe_link: unsubscribe_link,
-      login_link: login_link,
-      pages: pages,
-      query: query,
-      name: name
-    )
+    template =
+      PlausibleWeb.Email.weekly_report(email, site,
+        unique_visitors: unique_visitors,
+        change_visitors: change_visitors,
+        pageviews: pageviews,
+        change_pageviews: change_pageviews,
+        bounce_rate: bounce_rate,
+        change_bounce_rate: change_bounce_rate,
+        referrers: referrers,
+        unsubscribe_link: unsubscribe_link,
+        login_link: login_link,
+        pages: pages,
+        query: query,
+        name: name
+      )
 
     try do
       Plausible.Mailer.send_email(template)

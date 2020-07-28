@@ -3,10 +3,10 @@ import { withRouter } from 'react-router-dom'
 import Chart from 'chart.js'
 import FadeIn from '../fade-in'
 import { eventName } from '../query'
-import numberFormatter from '../number-formatter'
+import numberFormatter, {durationFormatter} from '../number-formatter'
 import * as api from '../api'
 
-function mainSet(plot, present_index, ctx) {
+function buildDataSet(plot, present_index, ctx, label) {
   var gradient = ctx.createLinearGradient(0, 0, 0, 300);
   gradient.addColorStop(0, 'rgba(101,116,205, 0.2)');
   gradient.addColorStop(1, 'rgba(101,116,205, 0)');
@@ -19,7 +19,7 @@ function mainSet(plot, present_index, ctx) {
     }
 
     return [{
-        label: 'Visitors',
+        label: label,
         data: plot,
         borderWidth: 3,
         borderColor: 'rgba(101,116,205)',
@@ -27,7 +27,7 @@ function mainSet(plot, present_index, ctx) {
         backgroundColor: gradient,
       },
       {
-        label: 'Visitors',
+        label: label,
         data: dashedPlot,
         borderWidth: 3,
         borderDash: [5, 10],
@@ -37,64 +37,13 @@ function mainSet(plot, present_index, ctx) {
     }]
   } else {
     return [{
-      label: 'Visitors',
+      label: label,
       data: plot,
       borderWidth: 3,
       borderColor: 'rgba(101,116,205)',
       pointBackgroundColor: 'rgba(101,116,205)',
       backgroundColor: gradient,
     }]
-  }
-}
-
-function compareSet(plot, present_index, ctx) {
-  var gradient = ctx.createLinearGradient(0, 0, 0, 300);
-  gradient.addColorStop(0, 'rgba(255, 68, 87, .2)');
-  gradient.addColorStop(1, 'rgba(255, 68, 87, 0)');
-
-  if (present_index) {
-    var dashedPart = plot.slice(present_index - 1);
-    var dashedPlot = (new Array(plot.length - dashedPart.length)).concat(dashedPart)
-    for(var i = present_index; i < plot.length; i++) {
-      plot[i] = undefined
-    }
-
-    return [{
-        label: 'Conversions',
-        data: plot,
-        borderWidth: 3,
-        borderColor: 'rgba(255, 68, 87, 1)',
-        pointBackgroundColor: 'rgba(255, 68, 87, 1)',
-        backgroundColor: gradient,
-      },
-      {
-        label: 'Conversions',
-        data: dashedPlot,
-        borderWidth: 3,
-        borderDash: [5, 10],
-        borderColor: 'rgba(255, 68, 87, 1)',
-        pointBackgroundColor: 'rgba(255, 68, 87, 1)',
-        backgroundColor: gradient,
-    }]
-  } else {
-    return [{
-      label: 'Conversions',
-      data: plot,
-      borderWidth: 3,
-      borderColor: 'rgba(255, 68, 87, 1)',
-      pointBackgroundColor: 'rgba(255, 68, 87, 1)',
-      backgroundColor: gradient,
-    }]
-  }
-}
-
-function dataSets(graphData, ctx) {
-  const dataSets = mainSet(graphData.plot, graphData.present_index, ctx)
-
-  if (graphData.compare_plot) {
-    return dataSets.concat(compareSet(graphData.compare_plot, graphData.present_index, ctx))
-  } else {
-    return dataSets
   }
 }
 
@@ -105,20 +54,29 @@ const MONTHS = [
   "November", "December"
 ]
 
-function dateFormatter(graphData) {
+function dateFormatter(interval, longForm) {
   return function(isoDate) {
-    const date = new Date(isoDate)
+    let date = new Date(isoDate)
 
-    if (graphData.interval === 'month') {
+    if (interval === 'month') {
       return MONTHS[date.getUTCMonth()];
-    } else if (graphData.interval === 'date') {
+    } else if (interval === 'date') {
       return date.getUTCDate() + ' ' + MONTHS[date.getUTCMonth()];
-    } else if (graphData.interval === 'hour') {
+    } else if (interval === 'hour') {
+      const parts = isoDate.split(/[^0-9]/);
+      date = new Date(parts[0],parts[1]-1,parts[2],parts[3],parts[4],parts[5])
       var hours = date.getHours(); // Not sure why getUTCHours doesn't work here
       var ampm = hours >= 12 ? 'pm' : 'am';
       hours = hours % 12;
       hours = hours ? hours : 12; // the hour '0' should be '12'
       return hours + ampm;
+    } else if (interval === 'minute') {
+      if (longForm) {
+        const minutesAgo = Math.abs(isoDate)
+        return minutesAgo === 1 ? '1 minute ago' : minutesAgo + ' minutes ago'
+      } else {
+        return isoDate + 'm'
+      }
     }
   }
 }
@@ -126,13 +84,15 @@ function dateFormatter(graphData) {
 class LineGraph extends React.Component {
   componentDidMount() {
     const {graphData} = this.props
-    const ctx = document.getElementById("main-graph-canvas").getContext('2d');
+    this.ctx = document.getElementById("main-graph-canvas").getContext('2d');
+    const label = this.props.query.filters.goal ? 'Converted visitors' : graphData.interval === 'minute' ? 'Pageviews' : 'Visitors'
+    const dataSet = buildDataSet(graphData.plot, graphData.present_index, this.ctx, label)
 
-    this.chart = new Chart(ctx, {
+    this.chart = new Chart(this.ctx, {
       type: 'line',
       data: {
         labels: graphData.labels,
-        datasets: dataSets(graphData, ctx)
+        datasets: dataSet
       },
       options: {
         animation: false,
@@ -158,7 +118,7 @@ class LineGraph extends React.Component {
           callbacks: {
             title: function(dataPoints) {
               const data = dataPoints[0]
-              return dateFormatter(graphData)(data.xLabel)
+              return dateFormatter(graphData.interval, true)(data.xLabel)
             },
             beforeBody: function() {
               this.drawnLabels = {}
@@ -199,12 +159,25 @@ class LineGraph extends React.Component {
             ticks: {
               autoSkip: true,
               maxTicksLimit: 8,
-              callback: dateFormatter(graphData),
+              callback: dateFormatter(graphData.interval),
             }
           }]
         }
       }
     });
+  }
+
+  componentDidUpdate(prevProps) {
+    if (this.props.graphData !== prevProps.graphData) {
+      const label = this.props.query.filters.goal ? 'Converted visitors' : this.props.graphData.interval === 'minute' ? 'Pageviews' : 'Visitors'
+      const newDataset = buildDataSet(this.props.graphData.plot, this.props.graphData.present_index, this.ctx, label)
+
+      for (let i = 0; i < newDataset[0].data.length; i++) {
+        this.chart.data.datasets[0].data[i] = newDataset[0].data[i]
+      }
+
+      this.chart.update()
+    }
   }
 
   onClick(e) {
@@ -236,9 +209,19 @@ class LineGraph extends React.Component {
     }
   }
 
+  renderTopStatNumber(stat) {
+    if (stat.name === 'Visit duration') {
+      return durationFormatter(stat.count)
+    } else if (typeof(stat.count) == 'number') {
+      return numberFormatter(stat.count)
+    } else {
+      return stat.percentage + '%'
+    }
+  }
+
   renderTopStats() {
     const {graphData} = this.props
-    return this.props.graphData.top_stats.map((stat, index) => {
+    const stats = this.props.graphData.top_stats.map((stat, index) => {
       let border = index > 0 ? 'lg:border-l border-gray-300' : ''
       border = index % 2 === 0 ? border + ' border-r lg:border-r-0' : border
 
@@ -246,12 +229,18 @@ class LineGraph extends React.Component {
         <div className={`px-8 w-1/2 my-4 lg:w-auto ${border}`} key={stat.name}>
           <div className="text-gray-500 text-xs font-bold tracking-wide uppercase">{stat.name}</div>
           <div className="my-1 flex justify-between items-center">
-            <b className="text-2xl mr-4">{ typeof(stat.count) == 'number' ? numberFormatter(stat.count) : stat.percentage + '%' }</b>
+            <b className="text-2xl mr-4">{ this.renderTopStatNumber(stat) }</b>
             {this.renderComparison(stat.name, stat.change)}
           </div>
         </div>
       )
     })
+
+    if (graphData.interval === 'minute') {
+      stats.push(<div key="dot" className="block pulsating-circle" style={{left: '125px', top: '52px'}}></div>)
+    }
+
+    return stats
   }
 
   downloadLink() {
@@ -259,9 +248,7 @@ class LineGraph extends React.Component {
 
     return (
       <a href={endpoint} download>
-        <svg className="w-4 h-5 absolute text-gray-700" style={{right: '2rem', top: '-2rem'}}>
-          <use xlinkHref="#feather-download" />
-        </svg>
+        <svg className="feather w-4 h-5 absolute text-gray-700" style={{right: '2rem', top: '-2rem'}} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
       </a>
     )
   }
@@ -293,6 +280,7 @@ export default class VisitorGraph extends React.Component {
 
   componentDidMount() {
     this.fetchGraphData()
+    if (this.props.timer) this.props.timer.onTick(this.fetchGraphData.bind(this))
   }
 
   componentDidUpdate(prevProps) {
@@ -320,7 +308,7 @@ export default class VisitorGraph extends React.Component {
 
   render() {
     return (
-      <div className="w-full bg-white shadow-xl rounded mt-6 main-graph">
+      <div className="w-full relative bg-white shadow-xl rounded mt-6 main-graph">
         { this.state.loading && <div className="loading pt-24 sm:pt-32 md:pt-48 mx-auto"><div></div></div> }
         <FadeIn show={!this.state.loading}>
           { this.renderInner() }
